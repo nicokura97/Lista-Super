@@ -2,8 +2,13 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Lista de compras</title>
+  <title>Lista Súper</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Manifest PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#007bff">
+
   <style>
     * {
       box-sizing: border-box;
@@ -177,7 +182,7 @@
 </head>
 <body>
   <div class="app">
-    <h1>Lista de compras</h1>
+    <h1>Lista Súper</h1>
 
     <form id="add-form">
       <input
@@ -213,6 +218,11 @@
   </div>
 
   <script>
+    // Registrar service worker (PWA)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("service-worker.js").catch(console.error);
+    }
+
     const STORAGE_KEY = "lista_super_urmah_v2";
     const form = document.getElementById("add-form");
     const itemNameInput = document.getElementById("item-name");
@@ -220,7 +230,6 @@
     const totalAmountEl = document.getElementById("total-amount");
     const resetBtn = document.getElementById("reset-btn");
 
-    // ---- Eventos principales ----
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       const name = itemNameInput.value.trim();
@@ -237,189 +246,3 @@
       itemList.innerHTML = "";
       recalculateTotal();
     });
-
-    // ---- Función para crear items ----
-    function addItem(name, qty = "1", price = "", checked = false) {
-      const li = document.createElement("li");
-
-      // Checkbox
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = checked;
-
-      // Nombre
-      const nameSpan = document.createElement("span");
-      nameSpan.textContent = name;
-      nameSpan.className = "name";
-
-      // Cantidad
-      const qtyInput = document.createElement("input");
-      qtyInput.type = "number";
-      qtyInput.min = "1";
-      qtyInput.step = "1";
-      qtyInput.className = "qty-input";
-      qtyInput.value = qty || "1";
-
-      // Precio unitario
-      const priceWrapper = document.createElement("div");
-      priceWrapper.className = "price-wrapper";
-
-      const currency = document.createElement("span");
-      currency.textContent = "$";
-
-      const priceInput = document.createElement("input");
-      priceInput.type = "text";
-      priceInput.placeholder = "0.00";
-      priceInput.className = "price-input";
-      priceInput.inputMode = "decimal";
-      if (price !== "") {
-        priceInput.value = price;
-      }
-
-      priceWrapper.appendChild(currency);
-      priceWrapper.appendChild(priceInput);
-
-      // Botón eliminar
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "remove-btn";
-      removeBtn.textContent = "✕";
-
-      // Eventos que disparan recálculo + guardado
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked) {
-          qtyInput.focus();
-        }
-        recalculateTotal();
-      });
-
-      // 🔧 NUEVA LÓGICA DE CANTIDAD: permite borrar el 1 sin que vuelva solo
-      qtyInput.addEventListener("input", () => {
-        const raw = qtyInput.value.trim();
-
-        // Si está vacío, dejamos que el usuario escriba tranquilo
-        if (raw === "") {
-          recalculateTotal();
-          return;
-        }
-
-        let val = parseInt(raw, 10);
-
-        // Si no es número, limpiamos
-        if (isNaN(val)) {
-          qtyInput.value = "";
-          recalculateTotal();
-          return;
-        }
-
-        // Si es menor que 1, lo dejamos vacío
-        if (val < 1) {
-          qtyInput.value = "";
-          recalculateTotal();
-          return;
-        }
-
-        // Si es un número válido, solo recalculamos
-        recalculateTotal();
-      });
-
-      priceInput.addEventListener("input", () => {
-        recalculateTotal();
-      });
-
-      removeBtn.addEventListener("click", () => {
-        li.remove();
-        recalculateTotal();
-      });
-
-      li.appendChild(checkbox);
-      li.appendChild(nameSpan);
-      li.appendChild(qtyInput);
-      li.appendChild(priceWrapper);
-      li.appendChild(removeBtn);
-
-      itemList.appendChild(li);
-    }
-
-    // ---- Total + guardado ----
-    function recalculateTotal() {
-      let total = 0;
-
-      const items = itemList.querySelectorAll("li");
-      items.forEach((li) => {
-        const checkbox = li.querySelector('input[type="checkbox"]');
-        const qtyInput = li.querySelector(".qty-input");
-        const priceInput = li.querySelector(".price-input");
-
-        if (checkbox && qtyInput && priceInput && checkbox.checked) {
-          const qtyRaw = qtyInput.value.trim();
-          // Si cantidad está vacía o no es válida, no sumamos este ítem
-          if (qtyRaw === "") return;
-
-          let qtyVal = parseInt(qtyRaw, 10);
-          if (isNaN(qtyVal) || qtyVal <= 0) return;
-
-          let priceVal = priceInput.value.trim().replace(",", ".");
-          const priceNum = parseFloat(priceVal);
-          if (!isNaN(priceNum)) {
-            total += qtyVal * priceNum;
-          }
-        }
-      });
-
-      totalAmountEl.textContent = total.toFixed(2);
-      saveToStorage();
-    }
-
-    function saveToStorage() {
-      const data = [];
-      const items = itemList.querySelectorAll("li");
-
-      items.forEach((li) => {
-        const checkbox = li.querySelector('input[type="checkbox"]');
-        const nameSpan = li.querySelector(".name");
-        const qtyInput = li.querySelector(".qty-input");
-        const priceInput = li.querySelector(".price-input");
-
-        data.push({
-          name: nameSpan ? nameSpan.textContent : "",
-          qty: qtyInput ? qtyInput.value.trim() : "",
-          price: priceInput ? priceInput.value.trim() : "",
-          checked: checkbox ? checkbox.checked : false,
-        });
-      });
-
-      if (data.length === 0) {
-        localStorage.removeItem(STORAGE_KEY);
-      } else {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      }
-    }
-
-    function loadFromStorage() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-
-      try {
-        const data = JSON.parse(raw);
-        if (!Array.isArray(data)) return;
-
-        data.forEach((item) => {
-          addItem(
-            item.name || "",
-            item.qty || "",
-            item.price || "",
-            !!item.checked
-          );
-        });
-        recalculateTotal();
-      } catch (e) {
-        console.error("Error leyendo storage:", e);
-      }
-    }
-
-    // ---- Al iniciar la app ----
-    loadFromStorage();
-  </script>
-</body>
-</html>
