@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lista de compras</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #f5f5f5;
+    }
+
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 16px 20px 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      margin: 0 0 12px;
+      text-align: center;
+    }
+
+    #add-form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    #item-name {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 0.95rem;
+    }
+
+    #add-form button {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 8px;
+      background: #007bff;
+      color: white;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    #add-form button:hover {
+      opacity: 0.9;
+    }
+
+    #reset-btn {
+      width: 100%;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: none;
+      background: #e74c3c;
+      color: #fff;
+      font-size: 0.85rem;
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+
+    #reset-btn:hover {
+      opacity: 0.9;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 12px;
+    }
+
+    li {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    li:last-child {
+      border-bottom: none;
+    }
+
+    li span.name {
+      font-size: 0.95rem;
+    }
+
+    .price-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+
+    .price-input {
+      width: 80px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 0.85rem;
+      text-align: right;
+    }
+
+    .remove-btn {
+      border: none;
+      background: transparent;
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 2px 4px;
+      color: #999;
+    }
+
+    .remove-btn:hover {
+      color: #e74c3c;
+    }
+
+    .total {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 600;
+      font-size: 1rem;
+      border-top: 1px solid #ddd;
+      padding-top: 8px;
+      margin-top: 4px;
+    }
+
+    .hint {
+      font-size: 0.75rem;
+      color: #777;
+      text-align: center;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Lista de compras</h1>
+
+    <form id="add-form">
+      <input
+        id="item-name"
+        type="text"
+        placeholder="Agregar producto (ej: leche, pan...)"
+        autocomplete="off"
+        required
+      />
+      <button type="submit">Agregar</button>
+    </form>
+
+    <button id="reset-btn" type="button">Resetear lista</button>
+
+    <ul id="item-list"></ul>
+
+    <div class="total">
+      <span>Total seleccionado:</span>
+      <span>$ <span id="total-amount">0.00</span></span>
+    </div>
+
+    <div class="hint">
+      Tildá el ítem y escribí el precio. Se guardan y se suman solo los que están marcados.
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "lista_super_urmah";
+    const form = document.getElementById("add-form");
+    const itemNameInput = document.getElementById("item-name");
+    const itemList = document.getElementById("item-list");
+    const totalAmountEl = document.getElementById("total-amount");
+    const resetBtn = document.getElementById("reset-btn");
+
+    // ---- Eventos principales ----
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      const name = itemNameInput.value.trim();
+      if (!name) return;
+      addItem(name);
+      itemNameInput.value = "";
+      itemNameInput.focus();
+      recalculateTotal(); // también guarda
+    });
+
+    resetBtn.addEventListener("click", () => {
+      const ok = confirm("¿Seguro que querés borrar toda la lista?");
+      if (!ok) return;
+      itemList.innerHTML = "";
+      recalculateTotal(); // esto también borra el storage
+    });
+
+    // ---- Funciones de items ----
+    function addItem(name, price = "", checked = false) {
+      const li = document.createElement("li");
+
+      // Checkbox
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = checked;
+
+      // Nombre
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = name;
+      nameSpan.className = "name";
+
+      // Precio
+      const priceWrapper = document.createElement("div");
+      priceWrapper.className = "price-wrapper";
+
+      const currency = document.createElement("span");
+      currency.textContent = "$";
+
+      const priceInput = document.createElement("input");
+      priceInput.type = "text";
+      priceInput.placeholder = "0.00";
+      priceInput.className = "price-input";
+      priceInput.inputMode = "decimal";
+      if (price !== "") {
+        priceInput.value = price;
+      }
+
+      priceWrapper.appendChild(currency);
+      priceWrapper.appendChild(priceInput);
+
+      // Botón eliminar
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "remove-btn";
+      removeBtn.textContent = "✕";
+
+      // Eventos que disparan recálculo + guardado
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) {
+          priceInput.focus();
+        }
+        recalculateTotal();
+      });
+
+      priceInput.addEventListener("input", () => {
+        recalculateTotal();
+      });
+
+      removeBtn.addEventListener("click", () => {
+        li.remove();
+        recalculateTotal();
+      });
+
+      li.appendChild(checkbox);
+      li.appendChild(nameSpan);
+      li.appendChild(priceWrapper);
+      li.appendChild(removeBtn);
+
+      itemList.appendChild(li);
+    }
+
+    // ---- Total + guardado ----
+    function recalculateTotal() {
+      let total = 0;
+
+      const items = itemList.querySelectorAll("li");
+      items.forEach((li) => {
+        const checkbox = li.querySelector('input[type="checkbox"]');
+        const priceInput = li.querySelector(".price-input");
+
+        if (checkbox && priceInput && checkbox.checked) {
+          let value = priceInput.value.trim();
+          // aceptar coma o punto
+          value = value.replace(",", ".");
+          const num = parseFloat(value);
+          if (!isNaN(num)) {
+            total += num;
+          }
+        }
+      });
+
+      totalAmountEl.textContent = total.toFixed(2);
+      saveToStorage(); // cada vez que recalculamos, guardamos
+    }
+
+    function saveToStorage() {
+      const data = [];
+      const items = itemList.querySelectorAll("li");
+
+      items.forEach((li) => {
+        const checkbox = li.querySelector('input[type="checkbox"]');
+        const nameSpan = li.querySelector(".name");
+        const priceInput = li.querySelector(".price-input");
+
+        data.push({
+          name: nameSpan ? nameSpan.textContent : "",
+          price: priceInput ? priceInput.value.trim() : "",
+          checked: checkbox ? checkbox.checked : false,
+        });
+      });
+
+      // Si no hay items, vaciamos el storage
+      if (data.length === 0) {
+        localStorage.removeItem(STORAGE_KEY);
+      } else {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      }
+    }
+
+    function loadFromStorage() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+
+      try {
+        const data = JSON.parse(raw);
+        if (!Array.isArray(data)) return;
+
+        data.forEach((item) => {
+          addItem(item.name || "", item.price || "", !!item.checked);
+        });
+        recalculateTotal(); // recalcula y vuelve a guardar limpio
+      } catch (e) {
+        console.error("Error leyendo storage:", e);
+      }
+    }
+
+    // ---- Al iniciar la app ----
+    loadFromStorage();
+  </script>
+</body>
+</html>
